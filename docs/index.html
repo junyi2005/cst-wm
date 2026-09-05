@@ -115,6 +115,25 @@
   .videobox { background: var(--bg-inset); border:1px solid var(--rule); border-radius:10px; padding:14px; text-align:center; }
   .videobox video { max-height: 74vh; max-width:100%; width:auto; border-radius:6px; display:block; margin:0 auto; background:#000; }
 
+  /* segment selector */
+  .segbar { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0 14px; }
+  .seg {
+    display:flex; flex-direction:column; align-items:flex-start; gap:1px;
+    padding:8px 14px; border-radius:9px; cursor:pointer;
+    background: var(--bg-soft); border:1px solid var(--rule); color: var(--fg);
+    font-family: inherit; font-size:14px; line-height:1.3; text-align:left;
+    transition: border-color .12s ease, background .12s ease, transform .12s ease;
+  }
+  .seg:hover { transform: translateY(-1px); border-color: var(--accent); }
+  .seg.is-active { background: var(--accent-soft); border-color: var(--accent); }
+  .seg.is-active .seg-t { color: var(--accent); }
+  .seg-t { font-weight:600; }
+  .seg-d { font-family: var(--mono); font-size:11.5px; color: var(--fg-faint); }
+  .seg-hl { border-style: dashed; }
+  .segcap { font-size:14.5px; color:var(--fg-muted); margin-top:14px; line-height:1.6; }
+  .segcap b { color: var(--fg); }
+  .segfull { font-size:13.5px; color:var(--fg-faint); margin-top:-4px; }
+
   .tablewrap { overflow-x:auto; margin:18px 0 6px; }
   table { border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px; }
   caption { caption-side:bottom; text-align:left; font-size:13.5px; color:var(--fg-muted); padding-top:10px; }
@@ -278,14 +297,49 @@
 
 <section id="demo">
   <h2>Demo</h2>
-  <p>Real-world deployment across indoor environments — following, distance regulation, and recovery
-    after the target is temporarily lost.</p>
+  <p>Real-world deployment on a physical robot, recorded across four environments that differ in
+    lighting and layout, plus one clip isolating a target-loss and re-acquisition episode. Pick a
+    segment:</p>
+
+  <div class="segbar" role="tablist" aria-label="Demo segments">
+    <button class="seg is-active" role="tab" aria-selected="true"
+            data-src="static/seg1_indoor_bright.mp4" data-poster="static/seg1_indoor_bright.jpg"
+            data-cap="<b>Bright indoor.</b> Office corridors under normal lighting. The robot holds a steady following distance down a straight corridor while the target walks away from it.">
+      <span class="seg-t">Bright indoor</span><span class="seg-d">0:14</span>
+    </button>
+    <button class="seg" role="tab" aria-selected="false"
+            data-src="static/seg2_outdoor_dim.mp4" data-poster="static/seg2_outdoor_dim.jpg"
+            data-cap="<b>Dim outdoor.</b> Night-time campus roads with parked cars, street lights and headlight glare — the regime where a detector-driven evidence signal is weakest and least stable.">
+      <span class="seg-t">Dim outdoor</span><span class="seg-d">0:30</span>
+    </button>
+    <button class="seg" role="tab" aria-selected="false"
+            data-src="static/seg3_indoor_dim.mp4" data-poster="static/seg3_indoor_dim.jpg"
+            data-cap="<b>Dim indoor.</b> A long run through poorly lit building interiors — lobbies, structural pillars, glass partitions and dark corridors, with repeated partial occlusion.">
+      <span class="seg-t">Dim indoor</span><span class="seg-d">1:07</span>
+    </button>
+    <button class="seg" role="tab" aria-selected="false"
+            data-src="static/seg4_indoor_long.mp4" data-poster="static/seg4_indoor_long.jpg"
+            data-cap="<b>Bright indoor, long run.</b> A longer continuous episode through lit corridors, doorways and turns, testing whether following quality holds over an extended horizon.">
+      <span class="seg-t">Bright indoor, long run</span><span class="seg-d">1:04</span>
+    </button>
+    <button class="seg seg-hl" role="tab" aria-selected="false"
+            data-src="static/seg5_reacquisition.mp4" data-poster="static/seg5_reacquisition.jpg"
+            data-cap="<b>Target loss and re-acquisition.</b> The target turns, passes behind a pillar and leaves the view for roughly three seconds. The robot keeps moving through the gap and picks the target back up, centred again — the behaviour the structured target-evidence branch is built for.">
+      <span class="seg-t">★ Loss &amp; re-acquisition</span><span class="seg-d">0:13</span>
+    </button>
+  </div>
+
   <div class="videobox">
-    <video controls playsinline preload="metadata" poster="static/demo_poster.jpg">
-      <source src="static/demo.mp4" type="video/mp4">
+    <video id="segvideo" controls playsinline preload="metadata"
+           poster="static/seg1_indoor_bright.jpg">
+      <source id="segsrc" src="static/seg1_indoor_bright.mp4" type="video/mp4">
       Your browser does not support the video tag.
     </video>
   </div>
+  <p id="segcap" class="segcap"><b>Bright indoor.</b> Office corridors under normal lighting. The robot
+    holds a steady following distance down a straight corridor while the target walks away from it.</p>
+  <p class="segfull">All four environment segments, uncut, in one file:
+    <a href="static/demo.mp4">full video (2:58)</a>.</p>
 
   <figure>
     <img src="static/realworld.png" alt="Qualitative real-world tracking results in several different environments.">
@@ -390,5 +444,31 @@
 </footer>
 
 </div>
+<script>
+(function () {
+  var video = document.getElementById('segvideo');
+  var src   = document.getElementById('segsrc');
+  var cap   = document.getElementById('segcap');
+  var tabs  = document.querySelectorAll('.seg');
+  if (!video || !src || !cap) return;
+  tabs.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      tabs.forEach(function (b) {
+        b.classList.remove('is-active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
+      video.pause();
+      video.poster = btn.dataset.poster;
+      src.src = btn.dataset.src;
+      video.load();
+      cap.innerHTML = btn.dataset.cap;
+      var p = video.play();
+      if (p && p.catch) { p.catch(function () {}); }
+    });
+  });
+})();
+</script>
 </body>
 </html>
