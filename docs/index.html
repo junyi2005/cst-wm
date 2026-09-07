@@ -198,43 +198,44 @@
 
 <section id="abstract">
   <h2>Abstract</h2>
-  <p class="lead">Embodied visual tracking requires a robot not only to react to the current view, but
-    also to choose actions that preserve or recover future evidence of a moving target under ego-motion,
-    occlusion, and distractors. This makes it a predictive decision problem over future target
-    observability and apparent scale.</p>
-  <p>A central difficulty is a task-specific form of <em class="term">causal hallucination</em>: in
-    action-conditioned sequential prediction, a model can exploit the strong correlation between robot
-    control and target-related observations by hallucinating a direct causal effect from the current
-    action to target evidence, rather than allowing action to influence such evidence only through robot
-    motion and the resulting observation change. This shortcut can yield plausible futures while giving
-    the wrong semantics for tracking-oriented planning and target re-acquisition. We propose
-    <b>CST-WM</b>, a causally structured world model that decomposes the latent state into a
-    target-evidence branch, a robot branch, and an observation branch, and factorizes the transition so
-    that direct action injection into the target-evidence branch is blocked while action remains
-    available to robot motion and observation updates. Combined with rollout-based model-predictive
-    control, CST-WM supports both stable following and temporary target re-acquisition within a unified
-    planning framework.</p>
+  <p class="lead">When the sensor moves with the agent, the agent's own action and what it observes stop
+    being independent. Any predictor trained on that data faces a choice it is never told about: learn how
+    the action moves the body and how the world answers, or learn the shortcut and read the answer straight
+    off the command. Both fit the data. Only one is the relation you meant.</p>
+  <p>We call the second outcome <em class="term">causal hallucination</em>. In embodied visual tracking it
+    takes a precise and damaging form: the model writes the current action <em>directly</em> into the latent
+    state that represents whether the target is still visible, instead of letting the action reach that state
+    only through robot motion and the change in observation it produces. The rollouts stay plausible and the
+    semantics go wrong — an agent planning on them cannot separate an action that keeps the target in view
+    from one that loses it, and re-acquisition after occlusion is assigned no meaning at all.</p>
+  <p><b>CST-WM</b> writes the relation among robot, target and environment into the transition itself. The
+    latent state is decomposed into a target-evidence branch, a robot branch and an observation branch, and
+    the factorization blocks any action-carrying representation from entering the target-evidence update
+    while action remains available to robot motion and observation. The constraint is architectural rather
+    than a penalty term, and it is verified rather than assumed: we measure the leakage Jacobian
+    <code>|∂H/∂a|</code> and intervene by swapping actions at rollout time. Combined with rollout-based
+    model-predictive control, one objective yields both stable following and temporary re-acquisition.</p>
 
   <div class="claim">
-    <p>For embodied visual tracking, future prediction alone is not enough —
-      <b>the predictive structure itself must align with how target evidence enters planning.</b></p>
+    <p>Predicting the future accurately is not the same as predicting it for the right reasons. For an agent
+      that acts on what it predicts, <b>the structure of the prediction has to match how evidence actually
+      reaches it</b> — and a constraint that cannot be shown to hold is not a constraint.</p>
   </div>
 </section>
 
 <section id="idea">
   <h2>The idea</h2>
-  <p>The hardest moments in following a person are not when the target is clearly visible. They are the
-    moments when the target is occluded, drifts out of the field of view, or becomes confusable with a
-    distractor — exactly when the robot must decide how to move <em>before</em> reliable evidence comes
-    back. So the value of an action depends on how it changes future target visibility and apparent
-    scale, not only on how it moves the robot.</p>
-  <p>That framing exposes a limitation on both sides of the usual split. Reactive trackers are myopic:
-    once the target disappears, they offer little basis for choosing actions that support multi-step
-    recovery. But a <em>generic</em> action-conditioned world model is not sufficient either. In embodied
-    tracking, the current action should influence future target evidence by moving the robot and changing
-    what will be observed next — <span class="bad">not by being written directly into the target-related
-    state itself</span>. A predictor that takes the shortcut still produces plausible futures, while
-    conflating robot control with target evidence and assigning the wrong semantics to re-acquisition.</p>
+  <p>An agent that follows a person spends most of its time in the easy case. The moments that decide the
+    episode are the other ones — the target occluded, drifting out of frame, or confusable with someone else
+    — where the robot has to commit to a movement <em>before</em> reliable evidence comes back. The value of
+    an action there is not how it moves the robot; it is what the action will do to the evidence.</p>
+  <p>That framing rules out both of the usual answers. A reactive tracker is myopic: once the target
+    disappears it has nothing left to plan with. But a <em>generic</em> action-conditioned world model is not
+    the answer either, because the very entanglement it is trained on offers it the shortcut. Action should
+    reach target evidence by moving the body and changing what the body will see —
+    <span class="bad">not by being written into the target state directly</span>. A predictor that takes the
+    shortcut still produces plausible futures while conflating control with evidence, and no accuracy metric
+    computed on those futures will tell you which model you have.</p>
 
   <div class="pillars">
     <div class="pillar">
