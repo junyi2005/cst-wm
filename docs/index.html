@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CST-WM: A Causally Structured World Model for Embodied Visual Tracking</title>
-<meta name="description" content="CST-WM blocks direct action injection into the target-evidence branch of a world model, so imagined futures carry the right semantics for tracking-oriented planning and target re-acquisition.">
+<meta name="description" content="CST-WM is a causally structured world model for embodied visual tracking: its transition removes the same-step edge from action to target evidence but keeps the path through robot motion and the resulting views.">
 <meta property="og:title" content="CST-WM: A Causally Structured World Model for Embodied Visual Tracking">
-<meta property="og:description" content="For embodied visual tracking, future prediction alone is not enough — the predictive structure itself must align with how target evidence enters planning.">
+<meta property="og:description" content="CST-WM is a causally structured world model for embodied visual tracking: its transition removes the same-step edge from action to target evidence but keeps the path through robot motion and the resulting views.">
 <meta property="og:image" content="static/teaser.png">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129302;</text></svg>">
@@ -150,16 +150,31 @@
 
   footer { padding:34px 0 60px; color:var(--fg-faint); font-size:14px; text-align:center; }
   footer a { color: var(--fg-muted); }
+
+  /* status pill above the title */
+  .venue {
+    display:inline-block; margin:0 0 16px; padding:3px 12px; border-radius:999px;
+    border:1px solid var(--accent); color:var(--accent);
+    font-size:12.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  }
+  table.compact { min-width:0; }
+  .tablegrid { display:grid; grid-template-columns:1fr; gap:4px; }
+  td.m { text-align:left; }
+  .tablegrid .tablewrap { margin:12px 0 0; }
+  .tablenote { font-size:13.5px; color:var(--fg-muted); margin-top:10px; }
+  td[rowspan] { vertical-align:top; color:var(--fg-muted); }
+  figure.narrow { max-width:560px; margin-left:auto; margin-right:auto; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="wrap">
+    <p class="venue">Under review</p>
     <h1><span class="name">CST-WM</span></h1>
     <p class="subtitle">A Causally Structured World Model<br>for Embodied Visual Tracking</p>
 
-    <p class="authors">Junyi Hu &nbsp;·&nbsp; Shuaihang Yuan &nbsp;·&nbsp; Yi Fang<sup>†</sup></p>
+    <p class="authors">Junyi Hu &nbsp;·&nbsp; Shuaihang Yuan &nbsp;·&nbsp; Jiazhao Liang &nbsp;·&nbsp; Yi Fang<sup>†</sup></p>
     <p class="affil">New York University Abu Dhabi</p>
     <p class="corr"><sup>†</sup> corresponding author &nbsp;·&nbsp; <a href="mailto:jh10472@nyu.edu">jh10472@nyu.edu</a></p>
 
@@ -185,122 +200,136 @@
 <section>
   <figure>
     <img src="static/teaser.png" alt="Given one egocentric view and two candidate action sequences, a conventional world model routes the action directly into the target-evidence update and cannot tell the two apart; CST-WM removes that edge and its predictions match the simulator.">
-    <figcaption><b>The failure this paper is about.</b> From one egocentric observation, the robot must
-      imagine which of two candidate action sequences — A (forward, turn-left) or B (forward,
-      turn-right) — keeps the target visible and at a valid following distance. A conventional world
-      model routes the current action <em>directly</em> into the target-evidence update, so it produces
-      plausible-looking rollouts that fail to separate A from B. CST-WM deletes that edge: target
-      evidence <code>H</code> is updated without reading the action, which only reaches future
-      observations through the robot branch <code>x</code>. The resulting predictions distinguish the two
-      sequences and agree with the simulator.</figcaption>
+    <figcaption><b>Causal structure of action-conditioned prediction in embodied visual tracking.</b>
+      Given an egocentric observation and candidate action sequences (A: forward, turn-left; B: forward,
+      turn-right), the model must imagine which sequence preserves target observability and following
+      distance. Conventional world models route the current action directly into the target-evidence
+      update, producing plausible rollouts that fail to discriminate A from B. CST-WM removes this direct
+      edge: the target-evidence branch <i>E</i><sub>ℓ+1</sub> is updated without action injection, and the
+      action only reaches future observations through the robot branch <i>R</i><sub>ℓ+1</sub>. The
+      resulting predictions distinguish the two sequences and agree with the simulator.</figcaption>
   </figure>
 </section>
 
 <section id="abstract">
   <h2>Abstract</h2>
-  <p class="lead">When the sensor moves with the agent, the agent's own action and what it observes stop
-    being independent. Any predictor trained on that data faces a choice it is never told about: learn how
-    the action moves the body and how the world answers, or learn the shortcut and read the answer straight
-    off the command. Both fit the data. Only one is the relation you meant.</p>
-  <p>We call the second outcome <em class="term">causal hallucination</em>. In embodied visual tracking it
-    takes a precise and damaging form: the model writes the current action <em>directly</em> into the latent
-    state that represents whether the target is still visible, instead of letting the action reach that state
-    only through robot motion and the change in observation it produces. The rollouts stay plausible and the
-    semantics go wrong — an agent planning on them cannot separate an action that keeps the target in view
-    from one that loses it, and re-acquisition after occlusion is assigned no meaning at all.</p>
-  <p><b>CST-WM</b> writes the relation among robot, target and environment into the transition itself. The
-    latent state is decomposed into a target-evidence branch, a robot branch and an observation branch, and
-    the factorization blocks any action-carrying representation from entering the target-evidence update
-    while action remains available to robot motion and observation. The constraint is architectural rather
-    than a penalty term, and it is verified rather than assumed: we measure the leakage Jacobian
-    <code>|∂H/∂a|</code> and intervene by swapping actions at rollout time. Combined with rollout-based
-    model-predictive control, one objective yields both stable following and temporary re-acquisition.</p>
-
-  <div class="claim">
-    <p>Predicting the future accurately is not the same as predicting it for the right reasons. For an agent
-      that acts on what it predicts, <b>the structure of the prediction has to match how evidence actually
-      reaches it</b> — and a constraint that cannot be shown to hold is not a constraint.</p>
-  </div>
+  <p class="lead">Embodied visual tracking requires a robot to choose actions that keep a moving target
+    observable at a suitable distance, and to recover it after occlusion, out-of-view drift, or distractor
+    crossings. We cast the task as planning over future target evidence with an action-conditioned world
+    model. In logged tracking data, however, the behavior policy's actions are correlated with where the
+    target is, so a generic predictor can learn a shortcut: it writes the current action directly into its
+    prediction of target evidence, instead of letting the action affect that evidence only by moving the
+    robot and changing what it observes. We call this failure <em class="term">causal hallucination</em>;
+    the resulting rollouts look plausible but rank candidate actions for the wrong reason.</p>
+  <p>We propose <b>CST-WM</b>, a causally structured world model whose state is split into
+    target-evidence, robot, and observation branches. Its transition removes the same-step edge from
+    action to target evidence but keeps the path through robot motion and the resulting views, so
+    candidate actions are still distinguished by their predicted ego-motion. With rollout-based
+    model-predictive control, a single model handles both steady following and re-acquisition after
+    target loss.</p>
+  <p>On EVT-Bench and Habitat 3.0, covering standard tracking, target-loss recovery, and cross-dataset
+    transfer, CST-WM improves following, distance-range control, safety, and re-acquisition over reactive
+    trackers and world-model baselines, and removing the action mask causes the largest drop in
+    re-acquisition among our ablations. Offline, CST-WM has lower multi-step rollout error, and its
+    ranking of candidate actions agrees better with the simulator's. On a Unitree Go2 quadruped, CST-WM
+    succeeds in 20 of 30 real-world trials under occlusion, distractor crossing, and fast motion, against
+    14 for TrackVLA.</p>
 </section>
 
 <section id="idea">
   <h2>The idea</h2>
-  <p>An agent that follows a person spends most of its time in the easy case. The moments that decide the
-    episode are the other ones — the target occluded, drifting out of frame, or confusable with someone else
-    — where the robot has to commit to a movement <em>before</em> reliable evidence comes back. The value of
-    an action there is not how it moves the robot; it is what the action will do to the evidence.</p>
-  <p>That framing rules out both of the usual answers. A reactive tracker is myopic: once the target
-    disappears it has nothing left to plan with. But a <em>generic</em> action-conditioned world model is not
-    the answer either, because the very entanglement it is trained on offers it the shortcut. Action should
-    reach target evidence by moving the body and changing what the body will see —
-    <span class="bad">not by being written into the target state directly</span>. A predictor that takes the
-    shortcut still produces plausible futures while conflating control with evidence, and no accuracy metric
-    computed on those futures will tell you which model you have.</p>
+  <p>The hardest moments in tracking are not when the target is clearly visible, but when it is
+    temporarily occluded, leaves the field of view, or becomes confusable with distractors. The value of
+    an action then depends not only on how it changes the robot state, but also on how it changes future
+    target visibility and apparent scale, so embodied visual tracking is a predictive decision problem
+    rather than a reactive mapping from the current frame to the next control.</p>
+  <p>Learning the predictor from logged tracking data has a pitfall: the recorded robot turns toward and
+    slows down for the target, so its actions are correlated with target evidence. A predictor can exploit
+    that correlation by attributing to the current action a direct effect on target evidence. The error is
+    invisible on logged action sequences, where both explanations predict similar futures, and surfaces
+    where planning relies on the model, under candidate actions that the recording robot never took.</p>
 
   <div class="pillars">
     <div class="pillar">
       <span class="n">01</span>
-      <h4>Structured latent state</h4>
-      <p>Target evidence, robot state, and observation are separate branches rather than one
-        entangled latent.</p>
+      <h4>Planning over target evidence</h4>
+      <p>Tracking is cast as planning over future target evidence: whether the target is observable, and
+        whether its apparent scale fits a valid following distance.</p>
     </div>
     <div class="pillar">
       <span class="n">02</span>
-      <h4>Blocked action edge</h4>
-      <p>The transition is factorized so no action-carrying representation can enter the
-        target-evidence update — enforced architecturally, not by a penalty.</p>
+      <h4>No direct action edge</h4>
+      <p>The target-evidence branch is updated without the current action, which enters only the robot
+        branch and reaches future observations through that route.</p>
     </div>
     <div class="pillar">
       <span class="n">03</span>
-      <h4>One planner, two behaviours</h4>
-      <p>Stable following and temporary re-acquisition fall out of the same rollout-based MPC
-        objective.</p>
+      <h4>Evidence read from imagined views</h4>
+      <p>An evidence head distilled from an open-vocabulary detector reads target evidence from each
+        imagined view, with no privileged geometry at test time.</p>
     </div>
   </div>
 </section>
 
 <section id="method">
   <h2>Method</h2>
-  <p>Each egocentric frame yields a compact <em class="term">target-evidence</em> token
-    <code>H</code> — an open-vocabulary detection confidence plus the normalized target box area, i.e.
-    whether the target is observable and how large it appears — together with a visual latent
-    <code>Z</code> from a frozen VAE and a robot state <code>x</code> integrated from the action history.
-    Crucially, <code>H</code> is a planning-oriented summary of observability and apparent scale, not a
-    full external state estimate, so no privileged geometry is needed at test time.</p>
-  <p>The transition is a diffusion model whose three branches are denoised in a fixed order under strict
-    masking: <code>H</code> is updated without reading the action; the robot branch absorbs the action and
-    becomes the sole action carrier; the observation branch then fuses both. The computational graph
-    contains no direct edge from the action to target evidence, and the zero Jacobian
-    <code>∂H<sub>ℓ+1</sub>/∂a<sub>ℓ</sub> = 0</code> serves as a diagnostic that the constraint really
-    holds. Planning is model-predictive control with the Cross-Entropy Method, scoring rollouts directly
-    on the predicted evidence tokens — so the planner never has to decode a full image at every horizon.</p>
+  <p>GroundingDINO returns a confidence <i>H</i><sup>vis</sup> and a box whose relative area gives the
+    apparent scale <i>H</i><sup>area</sup>, so the target evidence
+    <i>H</i><sub>ℓ</sub> = [<i>H</i><sup>vis</sup><sub>ℓ</sub>, <i>H</i><sup>area</sup><sub>ℓ</sub>] says
+    whether the target is visible and how far away it is. The rest of the scene enters through the latent
+    <i>Z</i><sub>ℓ</sub> of a pre-trained VAE, and the robot pose <i>x</i><sub>ℓ</sub> is integrated from
+    past actions.</p>
+  <p>Physically, the action can change target evidence only by moving the camera:
+    <i>a</i><sub>ℓ</sub> → <i>x</i><sub>ℓ+1</sub> → <i>Z</i><sub>ℓ+1</sub> → <i>H</i><sub>ℓ+1</sub>.
+    Each transition layer updates three groups of tokens in a fixed order, and attention masks decide what
+    each group may read. The target-evidence tokens <i>E</i><sub>ℓ+1</sub> are updated first and read
+    nothing that carries <i>a</i><sub>ℓ</sub>; the robot tokens <i>R</i><sub>ℓ+1</sub> are the only
+    representation that carries the current action; the observation tokens come last and read both. There
+    is no path from <i>a</i><sub>ℓ</sub> to <i>E</i><sub>ℓ+1</sub>, so
+    <code>∂E<sub>ℓ+1</sub>/∂a<sub>ℓ</sub> = 0</code> holds by construction, while the action still shapes
+    all later target evidence through the view.</p>
+  <p>An evidence head <i>g</i><sub>ψ</sub>, distilled from the detector, reads the target evidence of an
+    imagined state from the observation-branch tokens, so imagined states are scored without decoding.
+    Planning uses the Cross-Entropy Method (horizon <i>T</i> = 10, <i>N</i> = 128 candidates,
+    <i>K</i> = 16 elites, <i>M</i> = 4 iterations): each candidate is scored by the visibility and
+    apparent scale read from its imagined views, with penalties for invalid actions and unsafe predicted
+    motion, and the robot executes the first action of the best sequence and replans. While the target is
+    hidden, a candidate whose imagined views show the target again collects the visibility and scale terms
+    from that step on.</p>
 
   <figure>
-    <img src="static/pipeline.png" alt="Pipeline: structured state construction, causally structured diffusion transition with masked branches, and model-predictive planning with the Cross-Entropy Method.">
-    <figcaption><b>Overall pipeline.</b> (a) Structured state construction. (b) Causally structured
-      diffusion transition — the three branches denoised in a fixed order under architectural masking.
-      (c) Model-predictive planning with CEM: candidate action sequences are rolled out, scored, and the
-      first action of the best sequence is executed in receding-horizon form.</figcaption>
+    <img src="static/pipeline.png" alt="Overview of CST-WM: structured state, causally structured transition with the action edge into target evidence removed, and planning with the Cross-Entropy Method.">
+    <figcaption><b>Overview of CST-WM.</b> (a) <i>State.</i> GroundingDINO reads the target evidence
+      <i>H</i><sub>ℓ</sub> (confidence, box area) from <i>O</i><sub>ℓ</sub>, a frozen VAE encodes
+      <i>O</i><sub>ℓ</sub> into <i>Z</i><sub>ℓ</sub>, and the pose <i>x</i><sub>ℓ</sub> is integrated from
+      past actions. (b) <i>Transition.</i> (b1) The edge <i>a</i><sub>ℓ</sub> → <i>E</i><sub>ℓ+1</sub> is
+      removed, and the action reaches the next target evidence only along the highlighted path through
+      <i>R</i><sub>ℓ+1</sub> and <i>Z</i><sub>ℓ+1</sub>. (b2) Each layer updates the target-evidence,
+      robot, and observation branches in this order, and the evidence head <i>g</i><sub>ψ</sub>, distilled
+      from the detector, reads <i>Ĥ</i><sub>ℓ+1</sub> from the observation branch. (c) <i>Planning.</i> CEM
+      rolls out <i>N</i> sampled sequences, scores the evidence read from the imagined views, refits to the
+      top <i>K</i>, and executes the best first action.</figcaption>
   </figure>
 
   <h3>Is apparent scale a usable stand-in for distance?</h3>
-  <p>Within the 1–3 m following range the protocol targets, the detector-derived evidence score rises
-    monotonically with closeness and only saturates at very short range — enough to regulate following
-    distance without ever estimating metric distance. Training it with an auxiliary in-range distance
-    label (simulator-only, and never used at test time) closes most of the gap to a direct-distance
-    oracle: 0.70 DRS versus the oracle's 0.72.</p>
+  <p>The detector's score tracks the relative distance over most of the following range and saturates
+    only very close to the target, which is why the planner can use it as a distance signal. As the
+    planner's target evidence it comes close to the simulator's true distance (0.76 against 0.78
+    re-acquisition), and the distance-aware loss, used only in training, raises its rank correlation with
+    true distance from 0.71 to 0.83 across humanoids.</p>
   <figure>
-    <img src="static/proxy.png" alt="Detector-based target-evidence score plotted against true relative robot-human distance, rising monotonically over most of the range.">
-    <figcaption><b>The target-evidence score against true robot–human distance</b> on EVT-Bench. It is
-      an observability–distance proxy for planning, not a calibrated geometric estimate.</figcaption>
+    <img src="static/evidence.png" alt="GroundingDINO target-evidence score plotted against relative robot-human distance on EVT-Bench.">
+    <figcaption><b>GroundingDINO target-evidence score</b> against relative robot–human distance on
+      EVT-Bench. These readings are the current evidence and the training labels of the evidence
+      head.</figcaption>
   </figure>
 </section>
 
 <section id="demo">
   <h2>Demo</h2>
-  <p>Real-world deployment on a physical robot, recorded across four environments that differ in
-    lighting and layout, plus one clip isolating a target-loss and re-acquisition episode. Pick a
-    segment:</p>
+  <p>Real-world tracking on a Unitree Go2 with an Intel RealSense D435i RGB camera, recorded across four
+    environments that differ in lighting and layout, plus one clip isolating a target-loss and
+    re-acquisition episode. Pick a segment:</p>
 
   <div class="segbar" role="tablist" aria-label="Demo segments">
     <button class="seg is-active" role="tab" aria-selected="true"
@@ -310,7 +339,7 @@
     </button>
     <button class="seg" role="tab" aria-selected="false"
             data-src="static/seg2_outdoor_dim.mp4" data-poster="static/seg2_outdoor_dim.jpg"
-            data-cap="<b>Dim outdoor.</b> Night-time campus roads with parked cars, street lights and headlight glare — the regime where a detector-driven evidence signal is weakest and least stable.">
+            data-cap="<b>Dim outdoor.</b> Night-time campus roads with parked cars, street lights and headlight glare.">
       <span class="seg-t">Dim outdoor</span><span class="seg-d">0:30</span>
     </button>
     <button class="seg" role="tab" aria-selected="false"
@@ -320,12 +349,12 @@
     </button>
     <button class="seg" role="tab" aria-selected="false"
             data-src="static/seg4_indoor_long.mp4" data-poster="static/seg4_indoor_long.jpg"
-            data-cap="<b>Bright indoor, long run.</b> A longer continuous episode through lit corridors, doorways and turns, testing whether following quality holds over an extended horizon.">
+            data-cap="<b>Bright indoor, long run.</b> A longer continuous episode through lit corridors, doorways and turns.">
       <span class="seg-t">Bright indoor, long run</span><span class="seg-d">1:04</span>
     </button>
     <button class="seg seg-hl" role="tab" aria-selected="false"
             data-src="static/seg5_reacquisition.mp4" data-poster="static/seg5_reacquisition.jpg"
-            data-cap="<b>Target loss and re-acquisition.</b> The target turns, passes behind a pillar and leaves the view for roughly three seconds. The robot keeps moving through the gap and picks the target back up, centred again — the behaviour the structured target-evidence branch is built for.">
+            data-cap="<b>Target loss and re-acquisition.</b> The target turns, passes behind a pillar and leaves the view for roughly three seconds. The robot keeps moving through the gap and picks the target back up, centred again.">
       <span class="seg-t">★ Loss &amp; re-acquisition</span><span class="seg-d">0:13</span>
     </button>
   </div>
@@ -343,97 +372,206 @@
     <a href="static/demo.mp4">full video (2:58)</a>.</p>
 
   <figure>
-    <img src="static/realworld.png" alt="Qualitative real-world tracking results in several different environments.">
-    <figcaption><b>Qualitative real-world tracking</b> in different environments.</figcaption>
+    <img src="static/realworld.png" alt="Real-world tracking episodes in a library, office corridors, and a parking lot at night.">
+    <figcaption><b>Real-world tracking with CST-WM</b> in a library, office corridors, and a parking lot at
+      night. Each row is one episode, left to right in time; the blue curve is the planned
+      path.</figcaption>
   </figure>
+
+  <h3>Real-world trials</h3>
+  <p>We follow the real-robot protocol of TrackVLA: occlusion, distractor crossing, and fast motion, with
+    10 trials per scenario and method. As in TrackVLA and OA-VAT, planning runs on an offboard RTX 6000 Ada
+    GPU with a reduced budget, one planning step every 1.4 s. The model keeps no target identity, so a
+    trial in which the robot follows the distractor counts as a failure. CST-WM succeeds in 8, 6, and 6 of
+    10 trials, against 4, 6, and 4 for TrackVLA.</p>
+  <div class="tablewrap">
+    <table class="compact">
+      <thead>
+        <tr><th>Scenario</th><th>TrackVLA SR↑</th><th>TrackVLA TR↑</th><th>CST-WM SR↑</th><th>CST-WM TR↑</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Occlusion</td><td>40</td><td>55.8</td><td class="ours">80</td><td class="ours">64.1</td></tr>
+        <tr><td>Distractor</td><td>60</td><td>47.9</td><td class="ours">60</td><td class="ours">56.2</td></tr>
+        <tr><td>Fast motion</td><td>40</td><td>43.5</td><td class="ours">60</td><td class="ours">51.2</td></tr>
+      </tbody>
+      <caption>Real-world tracking, 10 trials per scenario and method. SR / TR: success / tracking rate
+        (%).</caption>
+    </table>
+  </div>
 </section>
 
 <section id="results">
   <h2>Results</h2>
-  <p>Evaluated on EVT-Bench and Habitat 3.0 from egocentric observations only, with scene-disjoint splits
-    and three seeds. The adapted NWM baseline shares our observation interface, planning horizon,
-    candidate budget, and action bounds — so the only remaining difference is the latent transition
-    design.</p>
+  <p>EVT-Bench and Habitat 3.0 with egocentric observations and scene-disjoint splits; means over three
+    seeds. The adapted NWM keeps NWM's non-factorized CDiT-XL/2 transition, in which the action conditions
+    every token, and shares data, optimizer, evidence read-out, objective, CEM budget, and action bounds
+    with CST-WM, at 6.6× our parameters and 3.6× our compute per pass, so any difference comes from the
+    transition.</p>
 
   <h3>Tracking</h3>
-  <div class="tablewrap">
-    <table>
-      <thead>
-        <tr><th>Method</th><th>EVT SR↑</th><th>EVT TR↑</th><th>EVT CR↓</th>
-            <th>Hab. F↑</th><th>Hab. DRS↑</th><th>Hab. ES↑</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Uni-NaVid</td><td>25.7</td><td>39.5</td><td>41.9</td><td>—</td><td>—</td><td>—</td></tr>
-        <tr><td>Habitat 3.0 baseline</td><td>—</td><td>—</td><td>—</td><td>0.29</td><td>0.47</td><td>0.40</td></tr>
-        <tr><td>SDA-S2</td><td>—</td><td>—</td><td>—</td><td>0.39</td><td>0.63</td><td>0.43</td></tr>
-        <tr><td>TrackVLA</td><td>85.1</td><td>78.6</td><td>1.65</td><td>—</td><td>—</td><td>—</td></tr>
-        <tr><td>TrackVLA++</td><td>86.0</td><td>81.0</td><td>2.10</td><td>—</td><td>—</td><td>—</td></tr>
-        <tr><td>Adapted NWM</td><td>—</td><td>—</td><td>—</td><td>0.41</td><td>0.61</td><td>0.49</td></tr>
-        <tr class="oursrow"><td><b>CST-WM</b></td><td class="ours">88.7</td><td class="ours">83.4</td><td class="ours">1.41</td><td class="ours">0.53</td><td class="ours">0.70</td><td class="ours">0.61</td></tr>
-      </tbody>
-      <caption>In-domain EVT-Bench (SR / TR / CR) and Habitat 3.0 standard tracking (F / DRS / ES).
-        Cross-dataset transfer from EVT-Bench to Habitat 3.0 holds the same ordering (CST-WM 0.48 F vs.
-        0.43 for the adapted NWM).</caption>
-    </table>
+  <p>On EVT-Bench single-target tracking, CST-WM reaches 88.7 SR and 83.4 TR, 2.7 and 2.4 points above
+    TrackVLA++, with the lowest collision rate. On Habitat 3.0 it leads on all four metrics; against the
+    adapted NWM, which differs only in the transition, it improves F and ES by 0.12 each and lowers CR by
+    0.06, although the adapted NWM is the larger model. The advantage carries over to cross-dataset
+    transfer.</p>
+  <div class="tablegrid">
+    <div class="tablewrap">
+      <table class="compact">
+        <thead>
+          <tr><th>EVT-Bench (STT)</th><th>SR↑</th><th>TR↑</th><th>CR↓</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Uni-NaVid</td><td>25.7</td><td>39.5</td><td>41.9</td></tr>
+          <tr><td>OA-VAT<sup>†</sup></td><td>32.4</td><td>63.9</td><td>3.70</td></tr>
+          <tr><td>TrackVLA</td><td>85.1</td><td>78.6</td><td>1.65</td></tr>
+          <tr><td>TrackVLA++</td><td>86.0</td><td>81.0</td><td>2.10</td></tr>
+          <tr class="oursrow"><td><b>CST-WM</b></td><td class="ours">88.7</td><td class="ours">83.4</td><td class="ours">1.41</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table class="compact">
+        <thead>
+          <tr><th>Habitat 3.0</th><th>F↑</th><th>DRS↑</th><th>CR↓</th><th>ES↑</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Habitat 3.0 baseline</td><td>0.29</td><td>0.47</td><td>0.48</td><td>0.40</td></tr>
+          <tr><td>Uni-NaVid</td><td>0.34</td><td>0.52</td><td>0.43</td><td>0.47</td></tr>
+          <tr><td>Adapted NWM</td><td>0.41</td><td>0.61</td><td>0.33</td><td>0.49</td></tr>
+          <tr><td>SDA-S2</td><td>0.39</td><td>0.63</td><td>0.57</td><td>0.43</td></tr>
+          <tr class="oursrow"><td><b>CST-WM</b></td><td class="ours">0.53</td><td class="ours">0.70</td><td class="ours">0.27</td><td class="ours">0.61</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table class="compact">
+        <thead>
+          <tr><th>Transfer → Habitat 3.0</th><th>F↑</th><th>DRS↑</th><th>CR↓</th><th>ES↑</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Uni-NaVid</td><td>0.40</td><td>0.56</td><td>0.39</td><td>0.45</td></tr>
+          <tr><td>TrackVLA</td><td>0.38</td><td>0.54</td><td>0.41</td><td>0.43</td></tr>
+          <tr><td>Adapted NWM</td><td>0.43</td><td>0.58</td><td>0.35</td><td>0.47</td></tr>
+          <tr><td>TrackVLA++</td><td>0.42</td><td>0.61</td><td>0.38</td><td>0.43</td></tr>
+          <tr class="oursrow"><td><b>CST-WM</b></td><td class="ours">0.48</td><td class="ours">0.65</td><td class="ours">0.30</td><td class="ours">0.54</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
+  <p class="tablenote">Main results: EVT-Bench single-target tracking; Habitat 3.0 standard tracking from a
+    visible target; transfer from EVT-Bench to Habitat 3.0. <sup>†</sup>Released pipeline without the
+    diffusion planner.</p>
 
   <h3>Recovery after temporary target loss</h3>
+  <p>Under all four causes of target loss, CST-WM has the highest Re-acq., Post-F, and Rec-ES and the
+    shortest TTR. Its margin over the adapted NWM is 0.09 in Re-acq. under short occlusion and 0.15–0.16
+    under long occlusion, out-of-view drift, and distractor crossing, where the target stays hidden
+    longest.</p>
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th>Method</th><th>Short occl. Re-acq.↑</th><th>Long occl. Re-acq.↑</th>
-            <th>Out-of-FOV Re-acq.↑</th><th>Distractor Re-acq.↑</th><th>Long occl. TTR↓</th></tr>
+        <tr><th>Condition</th><th>Method</th><th>Re-acq.↑</th><th>TTR↓</th><th>Post-F↑</th><th>Rec-ES↑</th></tr>
       </thead>
       <tbody>
-        <tr><td>TrackVLA</td><td>0.71</td><td>0.48</td><td>0.52</td><td>0.43</td><td>14.6</td></tr>
-        <tr><td>Adapted NWM</td><td>0.75</td><td>0.54</td><td>0.57</td><td>0.49</td><td>13.2</td></tr>
-        <tr class="oursrow"><td><b>CST-WM</b></td><td class="ours">0.84</td><td class="ours">0.69</td><td class="ours">0.73</td><td class="ours">0.65</td><td class="ours">9.8</td></tr>
+        <tr><td rowspan="3">Short occlusion</td><td class="m">TrackVLA</td><td>0.71</td><td>8.9</td><td>0.58</td><td>0.47</td></tr>
+        <tr><td class="m">Adapted NWM</td><td>0.75</td><td>8.1</td><td>0.62</td><td>0.50</td></tr>
+        <tr class="oursrow"><td class="m"><b>CST-WM</b></td><td class="ours">0.84</td><td class="ours">6.4</td><td class="ours">0.71</td><td class="ours">0.61</td></tr>
+        <tr><td rowspan="3">Long occlusion</td><td class="m">TrackVLA</td><td>0.48</td><td>14.6</td><td>0.41</td><td>0.29</td></tr>
+        <tr><td class="m">Adapted NWM</td><td>0.54</td><td>13.2</td><td>0.45</td><td>0.34</td></tr>
+        <tr class="oursrow"><td class="m"><b>CST-WM</b></td><td class="ours">0.69</td><td class="ours">9.8</td><td class="ours">0.57</td><td class="ours">0.47</td></tr>
+        <tr><td rowspan="3">Out-of-view drift</td><td class="m">TrackVLA</td><td>0.52</td><td>12.8</td><td>0.45</td><td>0.33</td></tr>
+        <tr><td class="m">Adapted NWM</td><td>0.57</td><td>11.7</td><td>0.49</td><td>0.37</td></tr>
+        <tr class="oursrow"><td class="m"><b>CST-WM</b></td><td class="ours">0.73</td><td class="ours">8.7</td><td class="ours">0.60</td><td class="ours">0.50</td></tr>
+        <tr><td rowspan="3">Distractor crossing</td><td class="m">TrackVLA</td><td>0.43</td><td>15.2</td><td>0.37</td><td>0.24</td></tr>
+        <tr><td class="m">Adapted NWM</td><td>0.49</td><td>14.0</td><td>0.41</td><td>0.29</td></tr>
+        <tr class="oursrow"><td class="m"><b>CST-WM</b></td><td class="ours">0.65</td><td class="ours">10.6</td><td class="ours">0.54</td><td class="ours">0.43</td></tr>
       </tbody>
-      <caption>The margin is widest under long occlusion and distractor crossing — the conditions that
-        most require long-horizon reasoning and a clean separation between target evidence and
-        action-conditioned observation change.</caption>
+      <caption>Habitat 3.0 target-loss protocol. Re-acq.: re-acquisition success; TTR: time to re-acquire
+        (steps); Post-F: following rate after re-acquisition; Rec-ES: recovery episode success.</caption>
+    </table>
+  </div>
+  <figure>
+    <img src="static/recovery.png" alt="Recovery episodes with CST-WM: visible, at the image edge, lost, re-acquired.">
+    <figcaption><b>Recovery with CST-WM</b> (Habitat 3.0 target-loss protocol). Each row is one episode:
+      visible, at the image edge, lost, re-acquired; the blue curve is the planned path.</figcaption>
+  </figure>
+
+  <h3>Do imagined futures rank candidates like the simulator?</h3>
+  <p>From each of 500 saved simulator states, the same 32 candidate action sequences are executed in the
+    simulator and imagined by every model. CST-WM has lower latent prediction error and higher
+    target-visibility AUROC at every horizon, and the gap grows with the horizon. Its ranking of the
+    candidates agrees best with the simulator's: Spearman ρ 0.68, against 0.47 for the adapted NWM and
+    0.52 for a TrackVLA-style predictor.</p>
+  <figure>
+    <img src="static/rollout.png" alt="Offline rollout fidelity against horizon: latent prediction error and target-visibility AUROC.">
+    <figcaption><b>Offline rollout fidelity</b> against horizon: (a) latent prediction error,
+      (b) target-visibility AUROC.</figcaption>
+  </figure>
+
+  <h3>Does the structural constraint hold?</h3>
+  <p>The Jacobian <code>|∂E<sub>ℓ+1</sub>/∂a<sub>ℓ</sub>|</code> and the change of
+    <i>E</i><sub>ℓ+1</sub> under action swaps are near zero for CST-WM, as the mask requires, whereas the
+    adapted NWM absorbs action information. The mask does not guarantee a third property: with the humanoid
+    held still and the robot moving, <i>E</i><sub>ℓ+1</sub> can change through <i>Z</i><sub>ℓ</sub> and
+    <i>x</i><sub>ℓ</sub>. CST-WM keeps it stable (0.98 against 0.61) while its predicted views follow the
+    viewpoint (0.84 against 0.78). The action moves the view but not the target.</p>
+  <div class="tablewrap">
+    <table class="compact">
+      <thead>
+        <tr><th>Diagnostic</th><th>Adapted NWM</th><th>CST-WM</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Ranking: Spearman ρ↑</td><td>0.47</td><td class="ours">0.68</td></tr>
+        <tr><td>Ranking: Kendall τ↑</td><td>0.33</td><td class="ours">0.51</td></tr>
+        <tr><td>|∂E<sub>ℓ+1</sub>/∂a<sub>ℓ</sub>|↓</td><td>0.112</td><td class="ours">0.001</td></tr>
+        <tr><td>Variance under action swap↓</td><td>0.084</td><td class="ours">0.006</td></tr>
+        <tr><td><i>W</i><sub>1</sub> under action swap↓</td><td>0.127</td><td class="ours">0.011</td></tr>
+        <tr><td>Stability of <i>E</i><sub>ℓ+1</sub>↑</td><td>0.61</td><td class="ours">0.98</td></tr>
+        <tr><td>View sensitivity↑</td><td>0.78</td><td class="ours">0.84</td></tr>
+      </tbody>
+      <caption>Offline diagnostics on Habitat 3.0. Top: ranking against the simulator. Middle: action in
+        <i>E</i><sub>ℓ+1</sub>. Bottom: humanoid still, robot moving.</caption>
     </table>
   </div>
 
-  <h3>Does the structural constraint actually hold?</h3>
-  <p>Three diagnostics say yes, and that it matters. The Jacobian of predicted target evidence with
-    respect to the current action falls to <b>0.001</b> for CST-WM against <b>0.112</b> for the adapted
-    NWM. Under an action-swap intervention the predicted evidence stays put (variance 0.006 vs. 0.084).
-    And in a controlled check where the humanoid is held still while the robot moves, target-evidence
-    stability reaches 0.98 while observation sensitivity stays at 0.84 — the model is selectively
-    insensitive to action in the right branch, not numb to it everywhere.</p>
-
-  <div class="row2">
-    <figure>
-      <img src="static/rollout.png" alt="Offline rollout fidelity versus planning horizon: latent prediction error and target-visibility AUROC.">
-      <figcaption><b>Rollout fidelity.</b> Lower latent error and higher target-visibility AUROC at every
-        horizon, with the gap widening as the horizon grows.</figcaption>
-    </figure>
-    <figure>
-      <img src="static/ablation.png" alt="Radar chart of the ablation study on Habitat 3.0, with the full model enclosing every ablated variant.">
-      <figcaption><b>Ablations.</b> Removing action masking costs the most in re-acquisition and
-        worsens leakage; the full model encloses every variant.</figcaption>
-    </figure>
+  <h3>Ablations</h3>
+  <p>Each ablation changes one component. Removing the target-evidence mask costs the most re-acquisition
+    (0.76 to 0.61) and planning-value consistency (0.68 to 0.55). Without the mask the evidence head
+    predicts the logged future better after 8 steps, yet ranks the counterfactual candidates worse and
+    recovers worse in closed loop: accuracy on the actions the behavior policy took does not carry over to
+    the actions it did not.</p>
+  <div class="tablewrap">
+    <table class="compact">
+      <thead>
+        <tr><th>Variant</th><th>F↑</th><th>DRS↑</th><th>Re-acq.↑</th><th>Plan. ρ↑</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>W/o masking</td><td>0.47</td><td>0.63</td><td>0.61</td><td>0.55</td></tr>
+        <tr><td>W/o factorization</td><td>0.49</td><td>0.66</td><td>0.64</td><td>0.58</td></tr>
+        <tr><td>W/o distance-aware loss</td><td>0.49</td><td>0.65</td><td>0.72</td><td>0.64</td></tr>
+        <tr><td>Deterministic</td><td>0.50</td><td>0.67</td><td>0.69</td><td>0.60</td></tr>
+        <tr class="oursrow"><td><b>Full model</b></td><td class="ours">0.53</td><td class="ours">0.70</td><td class="ours">0.76</td><td class="ours">0.68</td></tr>
+      </tbody>
+      <caption>One-component ablations, Habitat 3.0.</caption>
+    </table>
   </div>
 
-  <div class="row2">
-    <figure>
-      <img src="static/recovery.png" alt="Qualitative recovery episodes after temporary target loss on EVT-Bench.">
-      <figcaption><b>Recovery episodes</b> after temporary target loss on EVT-Bench.</figcaption>
-    </figure>
-    <figure>
-      <img src="static/pareto.png" alt="Performance versus per-step latency for three planning configurations.">
-      <figcaption><b>Performance–latency trade-off.</b> The default configuration captures most of the
-        gain without the cost of the largest setting.</figcaption>
-    </figure>
-  </div>
+  <h3>Planning cost</h3>
+  <p>A planning step runs its denoising passes over all candidates as one batch; on one RTX A6000 a pass
+    over 128 candidates takes 0.36 s. The simulator waits for the planner, so planning time does not enter
+    the simulated results, and a 4.7× larger budget adds only 0.02 re-acquisition.</p>
+  <figure class="narrow">
+    <img src="static/pareto.png" alt="Re-acquisition success against denoising compute per planning step for three planning budgets.">
+    <figcaption><b>Re-acquisition against denoising compute per planning step</b>; bubble size ∝
+      <i>N</i>.</figcaption>
+  </figure>
 </section>
 
 <section id="citation">
   <h2>Citation</h2>
 <pre>@article{hu2026cstwm,
   title   = {CST-WM: A Causally Structured World Model for Embodied Visual Tracking},
-  author  = {Hu, Junyi and Yuan, Shuaihang and Fang, Yi},
+  author  = {Hu, Junyi and Yuan, Shuaihang and Liang, Jiazhao and Fang, Yi},
   journal = {arXiv preprint},
   year    = {2026}
 }</pre>
