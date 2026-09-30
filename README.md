@@ -14,7 +14,7 @@ This repository contains the project page only; no code or model weights are rel
 @article{hu2026cstwm,
   title   = {CST-WM: A Causally Structured World Model for Embodied Visual Tracking},
   author  = {Hu, Junyi and Yuan, Shuaihang and Liang, Jiazhao and Fang, Yi},
-  journal = {arXiv preprint},
+  journal = {arXiv preprint arXiv:2609.06302},
   year    = {2026}
 }
 ```
